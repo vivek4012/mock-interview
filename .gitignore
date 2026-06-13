@@ -1,0 +1,48 @@
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+
+# Vercel
+.vercel/
+
+# Claude Code
+.claude/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.next/
+out/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Cache
+.cache/
+.parcel-cache/
+.eslintcache
+
+# Misc
+*.pem
+coverage/
