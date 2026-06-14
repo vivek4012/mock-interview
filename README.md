@@ -1,0 +1,280 @@
+# Mock Interview Platform
+
+An AI-powered mock interview platform where users log in with Google, provide their job details, and conduct a live interview. AssemblyAI transcribes speech in real time while GPT-4 asks adaptive follow-up questions based on the candidate's answers and the job description. After the session, GPT-4 evaluates the full transcript and returns detailed scores and feedback.
+
+## Monorepo Structure
+
+```
+oauth/
+├── backend/    # Node.js/Express REST API
+└── frontend/   # React SPA
+```
+
+---
+
+## Backend
+
+Node.js/Express REST API. Handles Google OAuth, JWT auth, real-time speech transcription via AssemblyAI, and AI-driven interview question generation and evaluation via OpenAI GPT-4.
+
+### Tech Stack
+
+- **Runtime:** Node.js (ESM)
+- **Framework:** Express 5
+- **Database:** MongoDB via Mongoose
+- **Auth:** Google OAuth 2.0 + JWT (access tokens)
+- **AI:** OpenAI GPT-4 — question generation & interview analysis
+- **Speech-to-Text:** AssemblyAI Universal Streaming v3
+- **Deployment:** Vercel (serverless)
+
+### Project Structure
+
+```
+backend/
+├── config/
+│   ├── config.js          # Centralized env config
+│   └── db.js              # MongoDB connection (serverless-safe)
+├── controllers/
+│   ├── authController.js  # Google OAuth flow + JWT issuance
+│   └── interviewController.js  # Full interview lifecycle
+├── middleware/
+│   └── authMiddleware.js  # JWT verification
+├── models/
+│   ├── user.js            # User schema (Google OAuth + local)
+│   └── interview.js       # Interview session schema
+├── routes/
+│   ├── authRoute.js       # /api/auth/*
+│   └── interviewRoute.js  # /api/interview/*
+├── services/
+│   ├── openaiService.js   # GPT-4 question generation
+│   └── assemblyaiService.js  # AssemblyAI token generation
+├── utils/
+│   ├── jwt.js             # Token pair generation
+│   └── errors.js          # Centralized error factory
+└── index.js               # Express app entry point
+```
+
+### API Reference
+
+#### Auth
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/auth/google` | Redirect to Google consent screen |
+| GET | `/api/auth/google/callback` | Google OAuth callback, issues JWT |
+| GET | `/api/auth/user/me` | Get authenticated user info |
+
+#### Interview
+
+All interview routes require `Authorization: Bearer <token>` header.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/interview` | Create interview session (status: pending) |
+| POST | `/api/interview/:id/start` | Start interview — returns AssemblyAI token + first AI question |
+| POST | `/api/interview/:id/question` | Generate next AI question based on conversation context |
+| POST | `/api/interview/:id/transcript` | Append message to transcript |
+| POST | `/api/interview/:id/end` | End interview (status: completed) |
+| POST | `/api/interview/:id/analyze` | Run GPT-4 analysis on completed interview |
+| GET | `/api/interview/list` | Get all interviews for the authenticated user |
+| GET | `/api/interview/:id/analysis` | Get full analysis for a specific interview |
+
+#### Interview Lifecycle
+
+```
+pending → in-progress → completed → analyzed
+  (create)    (start)      (end)     (analyze)
+```
+
+#### Create Interview Request Body
+
+```json
+{
+  "designation": "Senior Software Engineer",
+  "experience": 5,
+  "areaToFocus": "React, Node.js, System Design",
+  "jobDescription": "We are looking for..."
+}
+```
+
+#### Interview Analysis Response
+
+```json
+{
+  "overallScore": 78,
+  "technicalScore": 82,
+  "communicationScore": 74,
+  "strengths": ["..."],
+  "areasToImprove": ["..."],
+  "detailedFeedback": "...",
+  "keyInsights": ["..."],
+  "recommendedResources": ["..."],
+  "behavioralTraits": {
+    "confidence": 75,
+    "clarity": 70,
+    "technicalDepth": 85,
+    "problemSolving": 80
+  }
+}
+```
+
+### Backend Environment Variables
+
+Create a `.env` file in the `backend/` directory:
+
+```env
+PORT=5001
+
+# MongoDB
+MONGODB_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/<dbname>
+
+# JWT
+JWT_SECRET=your_jwt_secret
+JWT_REFRESH_SECRET=your_refresh_secret
+JWT_ACCESS_EXPIRES_IN=7d
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:5001/api/auth/google/callback
+
+# URLs
+CLIENT_URL=http://localhost:5173
+CORS_ORIGIN=http://localhost:5173
+
+# AI Services
+OPENAI_API_KEY=sk-...
+ASSEMBLYAI_API_KEY=your_assemblyai_key
+```
+
+### Backend Local Development
+
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+Server runs on `http://localhost:5001`.
+
+### Backend Deployment (Vercel)
+
+Configured as a Vercel serverless function via `vercel.json`. All routes forward to `index.js`.
+
+```bash
+cd backend
+vercel deploy
+```
+
+Set all env variables in Vercel dashboard under **Project → Settings → Environment Variables**. Update `GOOGLE_REDIRECT_URI`, `CLIENT_URL`, and `CORS_ORIGIN` to your production URLs.
+
+### AI Question Generation
+
+Questions are generated by GPT-4 using a time-aware strategy:
+
+- **7+ min remaining** — broad foundational questions, explore multiple topics
+- **4–7 min remaining** — focused follow-ups on candidate answers
+- **2–4 min remaining** — targeted questions, wrapping up key areas
+- **< 2 min remaining** — final clarifying questions
+
+The LLM decides each question based on the full conversation history, candidate profile, job description, and remaining time — so questions adapt dynamically to how the interview is going.
+
+---
+
+## Frontend
+
+React SPA for configuring and conducting mock interviews.
+
+### Tech Stack
+
+- **Framework:** React 19 + Vite 7
+- **Routing:** React Router v7
+- **Styling:** Tailwind CSS + shadcn/ui components
+- **HTTP:** Axios
+- **Auth:** JWT stored in localStorage
+- **Speech:** AssemblyAI Universal Streaming (browser WebSocket)
+
+### Project Structure
+
+```
+frontend/
+├── src/
+│   ├── pages/
+│   │   ├── Login.js               # Google OAuth login screen
+│   │   ├── AuthSuccess.js         # Handles token from OAuth redirect
+│   │   ├── Dashboard.js           # Interview history + scores
+│   │   ├── startInterview.js      # Interview setup form
+│   │   ├── interviewPlayGround.js # Live interview UI
+│   │   └── InterviewResults.js    # Post-interview analysis
+│   ├── components/
+│   │   ├── AuthRedirect.js        # Redirects / based on auth state
+│   │   ├── ProtectedRoute.js      # Guards authenticated routes
+│   │   ├── GoogleLoginButton.js   # Google OAuth trigger
+│   │   └── ui/                    # shadcn/ui components
+│   ├── utils/
+│   │   └── auth.js                # isAuthenticated(), logout()
+│   ├── App.jsx                    # Routes definition
+│   └── main.jsx                   # Entry point
+├── .env.example                   # Environment variable template
+└── vite.config.js
+```
+
+### Pages & User Flow
+
+```
+/ (AuthRedirect)
+ ├── not logged in → /login
+ └── logged in     → /dashboard
+
+/login                 Google OAuth button
+/auth/success          Captures token from redirect, stores in localStorage
+/dashboard             Interview history table with scores
+/start-interview       Form: designation, experience, area to focus, JD
+/interview-playground  Live interview — speech input + AI questions
+/interview-results     Scores, strengths, areas to improve, behavioral traits
+```
+
+### Frontend Environment Variables
+
+Create a `.env` file in the `frontend/` directory (use `.env.example` as reference):
+
+```env
+VITE_API_BASE_URL=http://localhost:5001
+```
+
+For production, set this to your deployed backend URL.
+
+### Frontend Local Development
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+App runs on `http://localhost:5173`.
+
+### Frontend Build & Deploy
+
+```bash
+cd frontend
+npm run build      # production build
+npm run preview    # preview locally
+vercel deploy      # deploy to Vercel
+```
+
+The `vercel.json` rewrites all routes to `index.html` for client-side routing. Set `VITE_API_BASE_URL` in the Vercel dashboard.
+
+### Authentication Flow
+
+1. User clicks **Login with Google** → redirected to `GET /api/auth/google`
+2. Google redirects back to backend callback
+3. Backend issues a JWT and redirects to `/auth/success?token=<jwt>`
+4. `AuthSuccess` captures the token, saves to `localStorage`, redirects to `/dashboard`
+5. All subsequent API calls include `Authorization: Bearer <token>`
+
+### Interview Flow
+
+1. **Setup** (`/start-interview`) — user fills designation, years of experience, area to focus, and pastes the job description
+2. **Live Interview** (`/interview-playground`) — backend returns an AssemblyAI streaming token; browser connects via WebSocket for real-time transcription; GPT-4 generates the next question after each answer
+3. **End Interview** — user ends the session; backend marks it `completed`
+4. **Analysis** (`/interview-results`) — GPT-4 evaluates the full transcript and returns scores for technical ability, communication, confidence, clarity, and problem-solving, along with strengths, areas to improve, and recommended resources
