@@ -5,7 +5,7 @@ An AI-powered mock interview platform where users log in with Google, provide th
 ## Monorepo Structure
 
 ```
-oauth/
+mock_interview/
 ├── backend/    # Node.js/Express REST API
 └── frontend/   # React SPA
 ```
